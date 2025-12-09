@@ -73,10 +73,32 @@ async function run() {
     app.post("/user", async (req, res) => {
       const userData = req.body;
       userData.role = "Customer";
+      userData.created_at = new Date().toISOString();
+      userData.last_loggedIn = new Date().toISOString();
+
+      const query = {
+        email: userData.email,
+      };
+
+      const alreadyExists = await usersCollection.findOne(query);
+      if (alreadyExists) {
+        const result = await usersCollection.updateOne(query, {
+          $set: {
+            last_loggedIn: new Date().toISOString(),
+          },
+        });
+        return res.send(result);
+      }
+
       const result = await usersCollection.insertOne(userData);
       res.send(result);
     });
 
+    // Role get api
+    app.get("/user/role", verifyJWT, async (req, res) => {
+      const result = await usersCollection.findOne({ email: req.tokenEmail });
+      res.send({ role: result?.role });
+    });
     app.get("/xyz", verifyJWT, (req, res) => {
       const tokenEmail = req.token_email;
       res.send({ message: "done", email: tokenEmail });
