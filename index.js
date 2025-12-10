@@ -49,6 +49,7 @@ async function run() {
   try {
     const db = client.db("LocalChefBazaar");
     const usersCollection = db.collection("Users");
+    const mealsCollection=db.collection("Meals");
 
     // create JWT TOKEN :
 
@@ -75,7 +76,7 @@ async function run() {
       userData.role = "Customer";
       userData.created_at = new Date().toISOString();
       userData.last_loggedIn = new Date().toISOString();
-
+      userData.status="Active";
       const query = {
         email: userData.email,
       };
@@ -94,15 +95,31 @@ async function run() {
       res.send(result);
     });
 
+    // get user data;
+    app.get("/user",verifyJWT,async (req,res)=>{
+       const result = await usersCollection.findOne({ email: req.token_email });
+      res.send(result);
+    })
     // Role get api
     app.get("/user/role", verifyJWT, async (req, res) => {
-      const result = await usersCollection.findOne({ email: req.tokenEmail });
+      const result = await usersCollection.findOne({ email: req.token_email });
       res.send({ role: result?.role });
     });
-    app.get("/xyz", verifyJWT, (req, res) => {
-      const tokenEmail = req.token_email;
-      res.send({ message: "done", email: tokenEmail });
-    });
+
+// Create Meals
+    app.post("/createMeals",verifyJWT,async(req,res)=>{
+      const mealData=req.body;
+      mealData.created_at=new Date().toLocaleString();
+      if(mealData.chefEmail!==req.token_email)
+      {
+        return res.status(403).send({message:"Access Forbidden"});
+      }
+
+      const result = await mealsCollection.insertOne(mealData)
+      res.send(result)
+    })
+
+
     await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
