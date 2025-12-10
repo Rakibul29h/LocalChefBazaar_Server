@@ -70,7 +70,7 @@ async function run() {
     const verifyAdmin = async (req, res, next) => {
       const email = req.token_email;
       const user = await usersCollection.findOne({ email });
-      if (user?.role !== "admin")
+      if (user?.role !== "Admin")
         return res
           .status(403)
           .send({ message: "Admin only Actions!", role: user?.role });
@@ -121,9 +121,28 @@ async function run() {
       res.send(result);
     });
 
+    app.patch("/user/makeFraud",verifyJWT,verifyAdmin,async(req,res)=>{
+
+      const {id}= req.query;
+      const query={_id:new ObjectId(id)};
+      const update={
+        $set:{
+          status:"Fraud"
+        }
+      }
+      const options={};
+      const result = await usersCollection.updateOne(query,update,options);
+      res.send(result);
+    })
     // get user data;
     app.get("/user", verifyJWT, async (req, res) => {
       const result = await usersCollection.findOne({ email: req.token_email });
+      res.send(result);
+    });
+    // get all user
+    app.get("/users", verifyJWT,verifyAdmin, async (req, res) => {
+      const cursor =  usersCollection.find({});
+      const result = await cursor.toArray();
       res.send(result);
     });
     // Role get api
