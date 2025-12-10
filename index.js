@@ -51,6 +51,7 @@ async function run() {
     const db = client.db("LocalChefBazaar");
     const usersCollection = db.collection("Users");
     const mealsCollection = db.collection("Meals");
+    const changeRoleRequestCollection=db.collection("Role Changing Request");
 
     // Check role is Chef or Not in middleware
     const verifyChef = async (req, res, next) => {
@@ -175,6 +176,29 @@ async function run() {
       }
       const option={};
       const result=await mealsCollection.updateOne(query,update,option);
+      res.send(result);
+    })
+
+    // request for role changing 
+    app.post("/beAdminOrChef",verifyJWT,async(req,res)=>{
+      const userData=req.body;
+      if(userData.email !==req.token_email)
+      {
+        return res.status(403).send({message:"Access Forbiden"});
+      }
+      const query={
+        id:userData.id,
+        requestType:userData.requestType
+      }
+      const isExists= await changeRoleRequestCollection.findOne(query);
+      if(isExists)
+      {
+        return res.send({message:"already sent"});
+      }
+      userData.requestStatus="pending";
+
+      const result = await changeRoleRequestCollection.insertOne(userData);
+
       res.send(result);
     })
 
