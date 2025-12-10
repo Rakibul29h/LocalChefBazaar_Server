@@ -28,7 +28,6 @@ const client = new MongoClient(uri, {
   },
 });
 
-
 // middleware section
 // JWT Token
 const verifyJWT = (req, res, next) => {
@@ -47,36 +46,36 @@ const verifyJWT = (req, res, next) => {
   next();
 };
 
-// Check role is Chef or Not in middleware
-    const verifyChef = async (req, res, next) => {
-      const email = req.token_email
-      const user = await usersCollection.findOne({ email })
-      if (user?.role !== 'Chef')
-        return res
-          .status(403)
-          .send({ message: 'Seller only Actions!', role: user?.role })
-      next()
-    }
-
-
-    // Verify Admin
-        const verifyAdmin = async (req, res, next) => {
-      const email = req.token_email
-      const user = await usersCollection.findOne({ email })
-      if (user?.role !== 'admin')
-        return res
-          .status(403)
-          .send({ message: 'Admin only Actions!', role: user?.role })
-
-      next()
-    }
-
 async function run() {
   try {
     const db = client.db("LocalChefBazaar");
     const usersCollection = db.collection("Users");
-    const mealsCollection=db.collection("Meals");
+    const mealsCollection = db.collection("Meals");
 
+    // Check role is Chef or Not in middleware
+    const verifyChef = async (req, res, next) => {
+      const email = req.token_email;
+
+      const user = await usersCollection.findOne({email});
+
+      if (user?.role !== "Chef")
+        return res
+          .status(403)
+          .send({ message: "Chef only Actions!", role: user?.role });
+      next();
+    };
+
+    // Verify Admin
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.token_email;
+      const user = await usersCollection.findOne({ email });
+      if (user?.role !== "admin")
+        return res
+          .status(403)
+          .send({ message: "Admin only Actions!", role: user?.role });
+
+      next();
+    };
     // create JWT TOKEN :
 
     app.post("/getToken", (req, res) => {
@@ -102,7 +101,7 @@ async function run() {
       userData.role = "Customer";
       userData.created_at = new Date().toISOString();
       userData.last_loggedIn = new Date().toISOString();
-      userData.status="Active";
+      userData.status = "Active";
       const query = {
         email: userData.email,
       };
@@ -122,29 +121,38 @@ async function run() {
     });
 
     // get user data;
-    app.get("/user",verifyJWT,async (req,res)=>{
-       const result = await usersCollection.findOne({ email: req.token_email });
+    app.get("/user", verifyJWT, async (req, res) => {
+      const result = await usersCollection.findOne({ email: req.token_email });
       res.send(result);
-    })
+    });
     // Role get api
     app.get("/user/role", verifyJWT, async (req, res) => {
       const result = await usersCollection.findOne({ email: req.token_email });
       res.send({ role: result?.role });
     });
 
-// Create Meals
-    app.post("/createMeals",verifyJWT,async(req,res)=>{
-      const mealData=req.body;
-      mealData.created_at=new Date().toLocaleString();
-      if(mealData.chefEmail!==req.token_email)
-      {
-        return res.status(403).send({message:"Access Forbidden"});
+    // Create Meals
+    app.post("/createMeals", verifyJWT, async (req, res) => {
+      const mealData = req.body;
+      mealData.created_at = new Date().toLocaleString();
+      if (mealData.chefEmail !== req.token_email) {
+        return res.status(403).send({ message: "Access Forbidden" });
       }
 
-      const result = await mealsCollection.insertOne(mealData)
-      res.send(result)
-    })
+      const result = await mealsCollection.insertOne(mealData);
+      res.send(result);
+    });
 
+    // Get Meals data
+
+    app.get("/meals/:email", verifyJWT, verifyChef, async (req, res) => {
+      const email = req.params.email;
+      const query={}
+      if(email)
+        query.chefEmail=email
+      const result = await mealsCollection.find(query).toArray();
+      res.send(result);
+    });
 
     await client.db("admin").command({ ping: 1 });
     console.log(
