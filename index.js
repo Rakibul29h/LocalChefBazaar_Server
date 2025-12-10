@@ -51,13 +51,13 @@ async function run() {
     const db = client.db("LocalChefBazaar");
     const usersCollection = db.collection("Users");
     const mealsCollection = db.collection("Meals");
-    const changeRoleRequestCollection=db.collection("Role Changing Request");
+    const changeRoleRequestCollection = db.collection("Role Changing Request");
 
     // Check role is Chef or Not in middleware
     const verifyChef = async (req, res, next) => {
       const email = req.token_email;
 
-      const user = await usersCollection.findOne({email});
+      const user = await usersCollection.findOne({ email });
 
       if (user?.role !== "Chef")
         return res
@@ -121,27 +121,99 @@ async function run() {
       res.send(result);
     });
 
-    app.patch("/user/makeFraud",verifyJWT,verifyAdmin,async(req,res)=>{
-
-      const {id}= req.query;
-      const query={_id:new ObjectId(id)};
-      const update={
-        $set:{
-          status:"Fraud"
-        }
-      }
-      const options={};
-      const result = await usersCollection.updateOne(query,update,options);
+    app.get("/request", verifyJWT, verifyAdmin, async (req, res) => {
+      const result = await changeRoleRequestCollection.find({}).sort({requestTime:-1}).toArray();
       res.send(result);
-    })
+    });
+
+    // approve as a admin
+
+    app.patch("/approve", verifyJWT, verifyAdmin, async (req, res) => {
+      const { requestId, userId, type } = req.query;
+      const requestQuery = {
+        _id: new ObjectId(requestId),
+      };
+      const userQuery = {
+        _id: new ObjectId(userId),
+      };
+      const update = {
+        $set: {
+          requestStatus: "Approved",
+        },
+      };
+
+      const requestResult = await changeRoleRequestCollection.updateOne(
+        requestQuery,
+        update,
+        {}
+      );
+        let result;
+        if (type === "chef") {
+          result = await usersCollection.updateOne(
+            userQuery,
+            {
+              $set: {
+                role: "Chef",
+              },
+            },
+            {}
+          );
+        } else {
+          result = await usersCollection.updateOne(
+            userQuery,
+            {
+              $set: {
+                role: "Admin",
+              },
+            },
+            {}
+          );
+        }
+      
+
+      res.send(result);
+    });
+
+    app.patch("/reject", verifyJWT, verifyAdmin, async (req, res) => {
+      const { requestId } = req.query;
+      const query = {
+        _id: new ObjectId(requestId),
+      };
+      const update = {
+        $set: {
+          requestStatus: "Rejected",
+        },
+      };
+      const result = await changeRoleRequestCollection.updateOne(
+        query,
+        update,
+        {}
+      );
+      res.send(result);
+    });
+
+    // Make Fraude:
+
+    app.patch("/user/makeFraud", verifyJWT, verifyAdmin, async (req, res) => {
+      const { id } = req.query;
+      const query = { _id: new ObjectId(id) };
+      const update = {
+        $set: {
+          status: "Fraud",
+        },
+      };
+      const options = {};
+      const result = await usersCollection.updateOne(query, update, options);
+      res.send(result);
+    });
     // get user data;
     app.get("/user", verifyJWT, async (req, res) => {
       const result = await usersCollection.findOne({ email: req.token_email });
       res.send(result);
     });
     // get all user
-    app.get("/users", verifyJWT,verifyAdmin, async (req, res) => {
-      const cursor =  usersCollection.find({});
+    app.get("/users", verifyJWT, verifyAdmin, async (req, res) => {
+      const cursor = usersCollection.find({});
       const result = await cursor.toArray();
       res.send(result);
     });
@@ -167,59 +239,54 @@ async function run() {
 
     app.get("/meals/:email", verifyJWT, verifyChef, async (req, res) => {
       const email = req.params.email;
-      const query={}
-      if(email)
-        query.chefEmail=email
+      const query = {};
+      if (email) query.chefEmail = email;
       const result = await mealsCollection.find(query).toArray();
       res.send(result);
     });
 
     // meals Delete:
 
-    app.delete("/meals/:id",verifyJWT,verifyChef,async(req,res)=>{
-
-      const id=req.params.id;
-      const result=await mealsCollection.deleteOne({_id:new ObjectId(id)});
+    app.delete("/meals/:id", verifyJWT, verifyChef, async (req, res) => {
+      const id = req.params.id;
+      const result = await mealsCollection.deleteOne({ _id: new ObjectId(id) });
       res.send(result);
-    })
-    app.patch("/meals/:id",verifyJWT,verifyChef,async(req,res)=>{
-
-      const id=req.params.id;
+    });
+    app.patch("/meals/:id", verifyJWT, verifyChef, async (req, res) => {
+      const id = req.params.id;
       const data = req.body;
-       data.updatedAt=new Date();
-      const query={_id:new ObjectId(id)};
-      const update={
-        $set:{
-          ...data
-        }
-      }
-      const option={};
-      const result=await mealsCollection.updateOne(query,update,option);
+      data.updatedAt = new Date();
+      const query = { _id: new ObjectId(id) };
+      const update = {
+        $set: {
+          ...data,
+        },
+      };
+      const option = {};
+      const result = await mealsCollection.updateOne(query, update, option);
       res.send(result);
-    })
+    });
 
-    // request for role changing 
-    app.post("/beAdminOrChef",verifyJWT,async(req,res)=>{
-      const userData=req.body;
-      if(userData.email !==req.token_email)
-      {
-        return res.status(403).send({message:"Access Forbiden"});
+    // request for role changing
+    app.post("/beAdminOrChef", verifyJWT, async (req, res) => {
+      const userData = req.body;
+      if (userData.email !== req.token_email) {
+        return res.status(403).send({ message: "Access Forbiden" });
       }
-      const query={
-        id:userData.id,
-        requestType:userData.requestType
+      const query = {
+        id: userData.id,
+        requestType: userData.requestType,
+      };
+      const isExists = await changeRoleRequestCollection.findOne(query);
+      if (isExists) {
+        return res.send({ message: "already sent" });
       }
-      const isExists= await changeRoleRequestCollection.findOne(query);
-      if(isExists)
-      {
-        return res.send({message:"already sent"});
-      }
-      userData.requestStatus="pending";
+      userData.requestStatus = "pending";
 
       const result = await changeRoleRequestCollection.insertOne(userData);
 
       res.send(result);
-    })
+    });
 
     await client.db("admin").command({ ping: 1 });
     console.log(
