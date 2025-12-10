@@ -28,8 +28,9 @@ const client = new MongoClient(uri, {
   },
 });
 
-// JWT Token
 
+// middleware section
+// JWT Token
 const verifyJWT = (req, res, next) => {
   const token = req.cookies?.token;
   if (!token) {
@@ -45,6 +46,31 @@ const verifyJWT = (req, res, next) => {
   });
   next();
 };
+
+// Check role is Chef or Not in middleware
+    const verifyChef = async (req, res, next) => {
+      const email = req.token_email
+      const user = await usersCollection.findOne({ email })
+      if (user?.role !== 'Chef')
+        return res
+          .status(403)
+          .send({ message: 'Seller only Actions!', role: user?.role })
+      next()
+    }
+
+
+    // Verify Admin
+        const verifyAdmin = async (req, res, next) => {
+      const email = req.token_email
+      const user = await usersCollection.findOne({ email })
+      if (user?.role !== 'admin')
+        return res
+          .status(403)
+          .send({ message: 'Admin only Actions!', role: user?.role })
+
+      next()
+    }
+
 async function run() {
   try {
     const db = client.db("LocalChefBazaar");
