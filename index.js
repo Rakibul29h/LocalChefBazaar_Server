@@ -1,6 +1,6 @@
 require("dotenv").config();
 const express = require("express");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
@@ -153,6 +153,24 @@ async function run() {
       const result = await mealsCollection.find(query).toArray();
       res.send(result);
     });
+
+    // meals Update:
+
+    app.patch("/meals/:id",verifyJWT,verifyChef,async(req,res)=>{
+
+      const id=req.params.id;
+      const data = req.body;
+       data.updatedAt=new Date();
+      const query={_id:new ObjectId(id)};
+      const update={
+        $set:{
+          ...data
+        }
+      }
+      const option={};
+      const result=await mealsCollection.updateOne(query,update,option);
+      res.send(result);
+    })
 
     await client.db("admin").command({ ping: 1 });
     console.log(
