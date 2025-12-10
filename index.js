@@ -154,8 +154,14 @@ async function run() {
       res.send(result);
     });
 
-    // meals Update:
+    // meals Delete:
 
+    app.delete("/meals/:id",verifyJWT,verifyChef,async(req,res)=>{
+
+      const id=req.params.id;
+      const result=await mealsCollection.deleteOne({_id:new ObjectId(id)});
+      res.send(result);
+    })
     app.patch("/meals/:id",verifyJWT,verifyChef,async(req,res)=>{
 
       const id=req.params.id;
