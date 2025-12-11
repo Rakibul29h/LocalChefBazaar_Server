@@ -53,6 +53,25 @@ async function run() {
     const mealsCollection = db.collection("Meals");
     const changeRoleRequestCollection = db.collection("Role Changing Request");
 
+    // generate random ChefId
+    async function generateUniqueChefId() {
+      let chefId;
+      let exists = true;
+
+      while (exists) {
+        // Generate random 6-digit ID
+        chefId = "CHEF-" + Math.floor(1000 + Math.random() * 9000);
+
+        // Check if this ID already exists
+        const found = await usersCollection.findOne({ chefID: chefId });
+        if (!found) {
+          exists = false;
+        }
+      }
+
+      return chefId;
+    }
+
     // Check role is Chef or Not in middleware
     const verifyChef = async (req, res, next) => {
       const email = req.token_email;
@@ -78,13 +97,14 @@ async function run() {
       next();
     };
     // create JWT TOKEN :
-
     app.post("/getToken", (req, res) => {
       const user = req.body;
 
       const token = jwt.sign(user, process.env.JWT_SECRET, { expiresIn: "1d" });
       res.cookie("token", token, {
         httpOnly: true,
+        secure: true,
+  sameSite: "none"
       });
       res.send({ success: true });
     });
@@ -93,6 +113,8 @@ async function run() {
     app.post("/logout", (req, res) => {
       res.clearCookie("token", {
         httpOnly: true,
+        sameSite: "none",
+        secure: true,
       });
       res.send({ success: true });
     });
@@ -122,7 +144,10 @@ async function run() {
     });
 
     app.get("/request", verifyJWT, verifyAdmin, async (req, res) => {
-      const result = await changeRoleRequestCollection.find({}).sort({requestTime:-1}).toArray();
+      const result = await changeRoleRequestCollection
+        .find({})
+        .sort({ requestTime: -1 })
+        .toArray();
       res.send(result);
     });
 
@@ -147,31 +172,32 @@ async function run() {
         update,
         {}
       );
-        let result;
-        if (type === "chef") {
-          result = await usersCollection.updateOne(
-            userQuery,
-            {
-              $set: {
-                role: "Chef",
-              },
-            },
-            {}
-          );
-        } else {
-          result = await usersCollection.updateOne(
-            userQuery,
-            {
-              $set: {
-                role: "Admin",
-              },
-            },
-            {}
-          );
-        }
-      
 
-      res.send(result);
+      if (type === "chef") {
+        const chefId = await generateUniqueChefId();
+        const result = await usersCollection.updateOne(
+          userQuery,
+          {
+            $set: {
+              role: "Chef",
+              chefID: chefId,
+            },
+          },
+          {}
+        );
+        return res.send(result);
+      } else {
+        const result1 = await usersCollection.updateOne(
+          userQuery,
+          {
+            $set: {
+              role: "Admin",
+            },
+          },
+          {}
+        );
+        return res.send(result1);
+      }
     });
 
     app.patch("/reject", verifyJWT, verifyAdmin, async (req, res) => {
@@ -235,12 +261,26 @@ async function run() {
       res.send(result);
     });
 
-    // Get Meals data
+    // Get All meals
+
+    app.get("/allMeals",async(req,res)=>{
+
+      const {sort} =req.query; 
+        let sortOption = {};
+      if (sort === "des") {
+    sortOption = { price: -1 };   
+  } else if (sort === "asc") {
+    sortOption = { price: 1 };    
+  }
+      const cursor = mealsCollection.find({}).sort(sortOption);
+      const result = await cursor.toArray();
+      res.send(result);
+    })
+    // Get My Meals data
 
     app.get("/meals/:email", verifyJWT, verifyChef, async (req, res) => {
       const email = req.params.email;
-      const query = {};
-      if (email) query.chefEmail = email;
+      const query = {chefEmail:email};
       const result = await mealsCollection.find(query).toArray();
       res.send(result);
     });
@@ -268,7 +308,7 @@ async function run() {
     });
 
     // request for role changing
-    app.post("/beAdminOrChef", verifyJWT, async (req, res) => {
+    app.post("/beAdminOrChef", verifyJWT, async (req, res) => { 
       const userData = req.body;
       if (userData.email !== req.token_email) {
         return res.status(403).send({ message: "Access Forbiden" });
