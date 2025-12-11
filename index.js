@@ -3,6 +3,8 @@ const express = require("express");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
+const stripe = require('stripe')(process.env.STPIPE_KEY)
+
 const cors = require("cors");
 const port = process.env.PORT || 3000;
 
@@ -52,7 +54,7 @@ async function run() {
     const usersCollection = db.collection("Users");
     const mealsCollection = db.collection("Meals");
     const changeRoleRequestCollection = db.collection("Role Changing Request");
-
+    const ordersCollection=db.collection("Orders")
     // generate random ChefId
     async function generateUniqueChefId() {
       let chefId;
@@ -261,7 +263,18 @@ async function run() {
       res.send(result);
     });
 
+    // get single Meal
+
+    app.get("/singleMeal/:id",verifyJWT,async(req,res)=>{
+      const {id}=req.params;
+      const query={
+        _id:new ObjectId(id)
+      }
+      const result = await mealsCollection.findOne(query);
+      res.send(result)
+    })
     // Get All meals
+
 
     app.get("/allMeals",async(req,res)=>{
 
@@ -328,6 +341,14 @@ async function run() {
       res.send(result);
     });
 
+    // Add Order to Database
+
+    app.post("/orders",verifyJWT,async (req,res)=>{
+      const ordersInfo=req.body;
+      ordersInfo.orderStatus="pending";
+      const result = await ordersCollection.insertOne(ordersInfo);
+      res.send(result);
+    })
     await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
