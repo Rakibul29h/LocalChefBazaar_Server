@@ -366,6 +366,74 @@ async function run() {
       res.send(result);
     });
 
+    app.patch("/chefOrder",verifyJWT , verifyChef,async(req,res)=>{
+
+      const {status,id}=req.query;
+      const query={
+        _id:new ObjectId(id)
+      }
+      let update;
+      if(status==="accepted")
+      {
+        update={
+          $set:{
+            orderStatus:status,
+            paymentStatus:"pending",
+          }
+        }
+      }else if(status==="delivered")
+      {
+        update={
+          $set:{
+            orderStatus:status,
+            paymentStatus: "paid"
+          }
+        }
+      }else{
+        update={
+        $set:{
+          orderStatus:status,
+        }
+      }
+      }
+    
+      const option = {};
+      const result = await ordersCollection.updateOne(query,update,option);
+      res.send({...result,orderStatus:status});
+    })
+
+
+    // payment getway:
+
+    app.post('/create-checkout-session',async(req,res)=>{
+      const paymentInfo=req.body;
+      const session = await stripe.checkout.sessions.create({
+        line_items:[
+          {
+            price_data:{
+              currency:'usd',
+              product_data:{
+                name:paymentInfo?.mealName
+              },
+              unit_amount:Number(paymentInfo.cost ) *100
+            },
+            quantity:paymentInfo.quantity,
+          },
+        ],
+        mode:'payment',
+        customer_email:paymentInfo?.customer?.email,
+        metadata:{
+          orderId:paymentInfo.orderId,
+          foodId:paymentInfo.foodId,
+          chefID:paymentInfo.chefID,
+          customerName:paymentInfo.customer.name
+        },
+       
+
+      })
+      res.send({message:"success"})
+    })
+
     // get Chef Order details:
     app.get("/chefOrder",verifyJWT,verifyChef,async(req,res)=>{
       const {chefID}=req.query;
