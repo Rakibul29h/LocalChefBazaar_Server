@@ -3,7 +3,7 @@ const express = require("express");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
-const stripe = require('stripe')(process.env.STPIPE_KEY)
+const stripe = require("stripe")(process.env.STPIPE_KEY);
 
 const cors = require("cors");
 const port = process.env.PORT || 3000;
@@ -54,7 +54,7 @@ async function run() {
     const usersCollection = db.collection("Users");
     const mealsCollection = db.collection("Meals");
     const changeRoleRequestCollection = db.collection("Role Changing Request");
-    const ordersCollection=db.collection("Orders")
+    const ordersCollection = db.collection("Orders");
     // generate random ChefId
     async function generateUniqueChefId() {
       let chefId;
@@ -106,7 +106,7 @@ async function run() {
       res.cookie("token", token, {
         httpOnly: true,
         secure: true,
-  sameSite: "none"
+        sameSite: "none",
       });
       res.send({ success: true });
     });
@@ -250,6 +250,10 @@ async function run() {
       const result = await usersCollection.findOne({ email: req.token_email });
       res.send({ role: result?.role });
     });
+    app.get("/user/chefID", verifyJWT,verifyChef, async (req, res) => {
+      const result = await usersCollection.findOne({ email: req.token_email });
+      res.send({ chefID: result?.chefID });
+    });
 
     // Create Meals
     app.post("/createMeals", verifyJWT, async (req, res) => {
@@ -265,35 +269,33 @@ async function run() {
 
     // get single Meal
 
-    app.get("/singleMeal/:id",verifyJWT,async(req,res)=>{
-      const {id}=req.params;
-      const query={
-        _id:new ObjectId(id)
-      }
+    app.get("/singleMeal/:id", verifyJWT, async (req, res) => {
+      const { id } = req.params;
+      const query = {
+        _id: new ObjectId(id),
+      };
       const result = await mealsCollection.findOne(query);
-      res.send(result)
-    })
+      res.send(result);
+    });
     // Get All meals
 
-
-    app.get("/allMeals",async(req,res)=>{
-
-      const {sort} =req.query; 
-        let sortOption = {};
+    app.get("/allMeals", async (req, res) => {
+      const { sort } = req.query;
+      let sortOption = {};
       if (sort === "des") {
-    sortOption = { price: -1 };   
-  } else if (sort === "asc") {
-    sortOption = { price: 1 };    
-  }
+        sortOption = { price: -1 };
+      } else if (sort === "asc") {
+        sortOption = { price: 1 };
+      }
       const cursor = mealsCollection.find({}).sort(sortOption);
       const result = await cursor.toArray();
       res.send(result);
-    })
+    });
     // Get My Meals data
 
     app.get("/meals/:email", verifyJWT, verifyChef, async (req, res) => {
       const email = req.params.email;
-      const query = {chefEmail:email};
+      const query = { chefEmail: email };
       const result = await mealsCollection.find(query).toArray();
       res.send(result);
     });
@@ -321,7 +323,7 @@ async function run() {
     });
 
     // request for role changing
-    app.post("/beAdminOrChef", verifyJWT, async (req, res) => { 
+    app.post("/beAdminOrChef", verifyJWT, async (req, res) => {
       const userData = req.body;
       if (userData.email !== req.token_email) {
         return res.status(403).send({ message: "Access Forbiden" });
@@ -343,10 +345,34 @@ async function run() {
 
     // Add Order to Database
 
-    app.post("/orders",verifyJWT,async (req,res)=>{
-      const ordersInfo=req.body;
-      ordersInfo.orderStatus="pending";
+    app.post("/orders", verifyJWT, async (req, res) => {
+      const ordersInfo = req.body;
+      ordersInfo.orderStatus = "pending";
       const result = await ordersCollection.insertOne(ordersInfo);
+      res.send(result); 
+    });
+
+    // get customer Order List
+    app.get("/customerOrders", verifyJWT, async (req, res) => {
+      const { email } = req.query;
+
+      if (email !== req.token_email) {
+        return res.status(403).send({ message: "Access Forbidden" });
+      }
+
+      const result = await ordersCollection
+        .find({ userEmail: email })
+        .toArray();
+      res.send(result);
+    });
+
+    // get Chef Order details:
+    app.get("/chefOrder",verifyJWT,verifyChef,async(req,res)=>{
+      const {chefID}=req.query;
+     const query={
+      chefID:chefID
+     }
+     const result = await ordersCollection.find(query).toArray();
       res.send(result);
     })
     await client.db("admin").command({ ping: 1 });
