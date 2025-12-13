@@ -55,6 +55,7 @@ async function run() {
     const mealsCollection = db.collection("Meals");
     const changeRoleRequestCollection = db.collection("Role Changing Request");
     const ordersCollection = db.collection("Orders");
+    const paymentCollection = db.collection("Payments");
     // generate random ChefId
     async function generateUniqueChefId() {
       let chefId;
@@ -250,7 +251,7 @@ async function run() {
       const result = await usersCollection.findOne({ email: req.token_email });
       res.send({ role: result?.role });
     });
-    app.get("/user/chefID", verifyJWT,verifyChef, async (req, res) => {
+    app.get("/user/chefID", verifyJWT, verifyChef, async (req, res) => {
       const result = await usersCollection.findOne({ email: req.token_email });
       res.send({ chefID: result?.chefID });
     });
@@ -349,7 +350,7 @@ async function run() {
       const ordersInfo = req.body;
       ordersInfo.orderStatus = "pending";
       const result = await ordersCollection.insertOne(ordersInfo);
-      res.send(result); 
+      res.send(result);
     });
 
     // get customer Order List
@@ -366,83 +367,124 @@ async function run() {
       res.send(result);
     });
 
-    app.patch("/chefOrder",verifyJWT , verifyChef,async(req,res)=>{
-
-      const {status,id}=req.query;
-      const query={
-        _id:new ObjectId(id)
-      }
+    app.patch("/chefOrder", verifyJWT, verifyChef, async (req, res) => {
+      const { status, id } = req.query;
+      const query = {
+        _id: new ObjectId(id),
+      };
       let update;
-      if(status==="accepted")
-      {
-        update={
-          $set:{
-            orderStatus:status,
-            paymentStatus:"pending",
-          }
-        }
-      }else if(status==="delivered")
-      {
-        update={
-          $set:{
-            orderStatus:status,
-            paymentStatus: "paid"
-          }
-        }
-      }else{
-        update={
-        $set:{
-          orderStatus:status,
-        }
+      if (status === "accepted") {
+        update = {
+          $set: {
+            orderStatus: status,
+            paymentStatus: "pending",
+          },
+        };
+      } else if (status === "delivered") {
+        update = {
+          $set: {
+            orderStatus: status,
+            paymentStatus: "paid",
+          },
+        };
+      } else {
+        update = {
+          $set: {
+            orderStatus: status,
+          },
+        };
       }
-      }
-    
-      const option = {};
-      const result = await ordersCollection.updateOne(query,update,option);
-      res.send({...result,orderStatus:status});
-    })
 
+      const option = {};
+      const result = await ordersCollection.updateOne(query, update, option);
+      res.send({ ...result, orderStatus: status });
+    });
 
     // payment getway:
 
-    app.post('/create-checkout-session',async(req,res)=>{
-      const paymentInfo=req.body;
+    app.post("/create-checkout-session", async (req, res) => {
+      const paymentInfo = req.body;
       const session = await stripe.checkout.sessions.create({
-        line_items:[
+        line_items: [
           {
-            price_data:{
-              currency:'usd',
-              product_data:{
-                name:paymentInfo?.mealName
+            price_data: {
+              currency: "usd",
+              product_data: {
+                name: paymentInfo?.mealName,
               },
-              unit_amount:Number(paymentInfo.cost ) *100
+              unit_amount: Number(paymentInfo.cost) * 100,
             },
-            quantity:paymentInfo.quantity,
+            quantity: paymentInfo.quantity,
           },
         ],
-        mode:'payment',
-        customer_email:paymentInfo?.customer?.email,
-        metadata:{
-          orderId:paymentInfo.orderId,
-          foodId:paymentInfo.foodId,
-          chefID:paymentInfo.chefID,
-          customerName:paymentInfo.customer.name
+        mode: "payment",
+        customer_email: paymentInfo?.customer?.email,
+        metadata: {
+          orderId: paymentInfo.orderId,
+          foodId: paymentInfo.foodId,
+          chefID: paymentInfo.chefID,
+          customerName: paymentInfo.customer.name,
         },
-       
+        success_url: `${process.env.CLIENT_DOMAIN}/dashboard/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.CLIENT_DOMAIN}/dashboard/myOrders`,
+      });
+      res.send({ url: session.url });
+    });
 
-      })
-      res.send({message:"success"})
-    })
+    // get session status:
+    app.get("/session-status", async (req, res) => {
+      const session = await stripe.checkout.sessions.retrieve(
+        req.query.session_id
+      );
+      const orderId = session.metadata.orderId;
+      const transaction_ID= session.payment_intent;
+      const isExists=await paymentCollection.findOne({transaction_ID:transaction_ID});
+      const order = await ordersCollection.findOne({
+        _id: new ObjectId(orderId),
+      });
+      if (order && !isExists) {
+        if (
+          session.status === "complete" &&
+          session.payment_status === "paid"
+        ) {
+          const paymentInfo = {
+            ...session.metadata,
+            transaction_ID,
+            Cost: session.amount_total / 100,
+          };
 
+          const result = await paymentCollection.insertOne(paymentInfo);
+          await ordersCollection.updateOne(
+            { _id: new ObjectId(orderId) },
+            {
+              $set: {
+                paymentStatus: "paid",
+                transaction_ID,
+              },
+            },
+            {}
+          );
+          return res.send({
+            transaction_ID,
+            paymentID:result.insertedId
+          })
+        }
+      }
+
+      res.send({
+        transaction_ID,
+        orderId
+      });
+    });
     // get Chef Order details:
-    app.get("/chefOrder",verifyJWT,verifyChef,async(req,res)=>{
-      const {chefID}=req.query;
-     const query={
-      chefID:chefID
-     }
-     const result = await ordersCollection.find(query).toArray();
+    app.get("/chefOrder", verifyJWT, verifyChef, async (req, res) => {
+      const { chefID } = req.query;
+      const query = {
+        chefID: chefID,
+      };
+      const result = await ordersCollection.find(query).toArray();
       res.send(result);
-    })
+    });
     await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
