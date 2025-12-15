@@ -518,6 +518,35 @@ async function run() {
       const result = await reviewCollection.find({ foodId:id}).sort({date:-1}).toArray();
       res.send(result);
     })
+    // GEt customer own reviews
+    app.get("/myReviews",verifyJWT,async(req,res)=>{
+      const {email}=req.query;
+      const result = await reviewCollection.find({reviewerEmail:email}).sort({date:-1}).toArray();
+      res.send(result)
+    }) 
+    // update user review
+
+    app.patch("/myReview/:id",verifyJWT,async(req,res)=>{
+      const id=req.params;
+      const updateData=req.body;
+      const query = {
+      _id: new ObjectId(id)
+      };
+      const updatedData={
+        $set:{
+          rating:updateData.rating,
+          comments:updateData.comments
+        }
+      }
+      const result = await reviewCollection.updateOne(query,updatedData,{});
+      res.send(result);
+    })
+
+    app.delete("/myReview/:id",verifyJWT,async(req,res)=>{
+      const id=req.params;   
+      const result = await reviewCollection.deleteOne({_id:new ObjectId(id)});
+      res.send(result);
+    })
 
     await client.db("admin").command({ ping: 1 });
     console.log(
