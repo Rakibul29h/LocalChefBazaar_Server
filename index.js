@@ -57,6 +57,7 @@ async function run() {
     const ordersCollection = db.collection("Orders");
     const paymentCollection = db.collection("Payments");
     const reviewCollection = db.collection("Reviews");
+    const favoriteCollection = db.collection("Favorite");
     // generate random ChefId
     async function generateUniqueChefId() {
       let chefId;
@@ -295,10 +296,9 @@ async function run() {
     });
 
     // Get home meals
-    
+
     app.get("/hMeals", async (req, res) => {
-      
-      const cursor = mealsCollection.find({}).limit(6).sort({created_at:1});
+      const cursor = mealsCollection.find({}).limit(6).sort({ created_at: 1 });
       const result = await cursor.toArray();
       res.send(result);
     });
@@ -502,51 +502,77 @@ async function run() {
       res.send(result);
     });
     // Post REviews
-    app.post("/review",verifyJWT,async(req,res)=>{
-      const reviewData=req.body;
-      if(reviewData.reviewerEmail!==req.token_email)
-      {
-        return res.status(403).send({message:"Access Forbiden"})
+    app.post("/review", verifyJWT, async (req, res) => {
+      const reviewData = req.body;
+      if (reviewData.reviewerEmail !== req.token_email) {
+        return res.status(403).send({ message: "Access Forbiden" });
       }
       const result = await reviewCollection.insertOne(reviewData);
       console.log(result);
-      res.send(result)
-    })
-
-    app.get("/review",verifyJWT,async (req,res)=>{
-      const {id}=req.query;
-      const result = await reviewCollection.find({ foodId:id}).sort({date:-1}).toArray();
       res.send(result);
-    })
+    });
+
+    app.get("/review", verifyJWT, async (req, res) => {
+      const { id } = req.query;
+      const result = await reviewCollection
+        .find({ foodId: id })
+        .sort({ date: -1 })
+        .toArray();
+      res.send(result);
+    });
     // GEt customer own reviews
-    app.get("/myReviews",verifyJWT,async(req,res)=>{
-      const {email}=req.query;
-      const result = await reviewCollection.find({reviewerEmail:email}).sort({date:-1}).toArray();
-      res.send(result)
-    }) 
+    app.get("/myReviews", verifyJWT, async (req, res) => {
+      const { email } = req.query;
+      const result = await reviewCollection
+        .find({ reviewerEmail: email })
+        .sort({ date: -1 })
+        .toArray();
+      res.send(result);
+    });
     // update user review
 
-    app.patch("/myReview/:id",verifyJWT,async(req,res)=>{
-      const id=req.params;
-      const updateData=req.body;
+    app.patch("/myReview/:id", verifyJWT, async (req, res) => {
+      const id = req.params;
+      const updateData = req.body;
       const query = {
-      _id: new ObjectId(id)
+        _id: new ObjectId(id),
       };
-      const updatedData={
-        $set:{
-          rating:updateData.rating,
-          comments:updateData.comments
-        }
-      }
-      const result = await reviewCollection.updateOne(query,updatedData,{});
+      const updatedData = {
+        $set: {
+          rating: updateData.rating,
+          comments: updateData.comments,
+        },
+      };
+      const result = await reviewCollection.updateOne(query, updatedData, {});
       res.send(result);
-    })
+    });
 
-    app.delete("/myReview/:id",verifyJWT,async(req,res)=>{
-      const id=req.params;   
-      const result = await reviewCollection.deleteOne({_id:new ObjectId(id)});
+    app.delete("/myReview/:id", verifyJWT, async (req, res) => {
+      const id = req.params;
+      const result = await reviewCollection.deleteOne({
+        _id: new ObjectId(id),
+      });
       res.send(result);
-    })
+    });
+
+    // Add favorite meal for user:
+
+    app.post("/addToFavorite", verifyJWT, async (req, res) => {
+      const data = req.body;
+      data.addedAt = new Date();
+      if (data.userEmail !== req.token_email) {
+        return res.status(403).send({ message: "Access Forbiden" });
+      }
+
+      const alreadyExists = await favoriteCollection.findOne({
+        mealId: data.mealId,
+      });
+      if (alreadyExists)
+        return res.send({ message: "Already added to favorite" });
+
+      const result = await favoriteCollection.insertOne(data);
+      res.send(result);
+    });
 
     await client.db("admin").command({ ping: 1 });
     console.log(
