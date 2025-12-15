@@ -56,6 +56,7 @@ async function run() {
     const changeRoleRequestCollection = db.collection("Role Changing Request");
     const ordersCollection = db.collection("Orders");
     const paymentCollection = db.collection("Payments");
+    const reviewCollection = db.collection("Reviews");
     // generate random ChefId
     async function generateUniqueChefId() {
       let chefId;
@@ -292,6 +293,15 @@ async function run() {
       const result = await cursor.toArray();
       res.send(result);
     });
+
+    // Get home meals
+    
+    app.get("/hMeals", async (req, res) => {
+      
+      const cursor = mealsCollection.find({}).limit(6).sort({created_at:1});
+      const result = await cursor.toArray();
+      res.send(result);
+    });
     // Get My Meals data
 
     app.get("/meals/:email", verifyJWT, verifyChef, async (req, res) => {
@@ -437,8 +447,10 @@ async function run() {
         req.query.session_id
       );
       const orderId = session.metadata.orderId;
-      const transaction_ID= session.payment_intent;
-      const isExists=await paymentCollection.findOne({transaction_ID:transaction_ID});
+      const transaction_ID = session.payment_intent;
+      const isExists = await paymentCollection.findOne({
+        transaction_ID: transaction_ID,
+      });
       const order = await ordersCollection.findOne({
         _id: new ObjectId(orderId),
       });
@@ -466,14 +478,18 @@ async function run() {
           );
           return res.send({
             transaction_ID,
-            paymentID:result.insertedId
-          })
+            paymentID: result.insertedId,
+            date: new Date(),
+            amount: session.amount_total / 100,
+          });
         }
       }
 
       res.send({
         transaction_ID,
-        orderId
+        orderId,
+        date: new Date(),
+        amount: session.amount_total / 100,
       });
     });
     // get Chef Order details:
@@ -485,6 +501,24 @@ async function run() {
       const result = await ordersCollection.find(query).toArray();
       res.send(result);
     });
+    // Post REviews
+    app.post("/review",verifyJWT,async(req,res)=>{
+      const reviewData=req.body;
+      if(reviewData.reviewerEmail!==req.token_email)
+      {
+        return res.status(403).send({message:"Access Forbiden"})
+      }
+      const result = await reviewCollection.insertOne(reviewData);
+      console.log(result);
+      res.send(result)
+    })
+
+    app.get("/review",verifyJWT,async (req,res)=>{
+      const {id}=req.query;
+      const result = await reviewCollection.find({ foodId:id}).sort({date:-1}).toArray();
+      res.send(result);
+    })
+
     await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
