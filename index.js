@@ -574,6 +574,25 @@ async function run() {
       res.send(result);
     });
 
+    // GEt favorite meals
+    app.get("/myFavorite",verifyJWT,async(req,res)=>{
+      const {email}= req.query;
+      if(email !== req.token_email)
+        return res.status(403).send({message:"Access Forbidden"});
+
+      const result = await favoriteCollection.find({userEmail:email}).sort({addedAt:-1}).toArray();
+      res.send(result);
+    })
+    // Delete from favorite meal:
+
+    app.delete("/myFavorite/:id",verifyJWT,async(req,res)=>{
+      const id=req.params;
+      const query={
+        _id:new ObjectId(id)
+      }
+      const result = await favoriteCollection.deleteOne(query);
+      res.send(result);
+    })
     await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
