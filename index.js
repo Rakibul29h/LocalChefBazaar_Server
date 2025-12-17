@@ -283,16 +283,21 @@ async function run() {
     // Get All meals
 
     app.get("/allMeals", async (req, res) => {
-      const { sort } = req.query;
+      const { sort,limits=0,skip=0,search="" } = req.query;
       let sortOption = {};
       if (sort === "des") {
         sortOption = { price: -1 };
       } else if (sort === "asc") {
         sortOption = { price: 1 };
       }
-      const cursor = mealsCollection.find({}).sort(sortOption);
+      const query=search?{foodName:{$regex:search,$options:"i"}}:{};
+      const cursor = mealsCollection.find(query).sort(sortOption).limit(Number(limits)).skip( Number(skip));
       const result = await cursor.toArray();
-      res.send(result);
+      const totalMeal= await mealsCollection.countDocuments(query);
+      res.send({
+        totalMeal:totalMeal,
+        meals:result
+      });
     });
 
     // Get home meals
