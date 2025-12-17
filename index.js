@@ -575,24 +575,101 @@ async function run() {
     });
 
     // GEt favorite meals
-    app.get("/myFavorite",verifyJWT,async(req,res)=>{
-      const {email}= req.query;
-      if(email !== req.token_email)
-        return res.status(403).send({message:"Access Forbidden"});
+    app.get("/myFavorite", verifyJWT, async (req, res) => {
+      const { email } = req.query;
+      if (email !== req.token_email)
+        return res.status(403).send({ message: "Access Forbidden" });
 
-      const result = await favoriteCollection.find({userEmail:email}).sort({addedAt:-1}).toArray();
+      const result = await favoriteCollection
+        .find({ userEmail: email })
+        .sort({ addedAt: -1 })
+        .toArray();
       res.send(result);
-    })
+    });
     // Delete from favorite meal:
 
-    app.delete("/myFavorite/:id",verifyJWT,async(req,res)=>{
-      const id=req.params;
-      const query={
-        _id:new ObjectId(id)
-      }
+    app.delete("/myFavorite/:id", verifyJWT, async (req, res) => {
+      const id = req.params;
+      const query = {
+        _id: new ObjectId(id),
+      };
       const result = await favoriteCollection.deleteOne(query);
       res.send(result);
-    })
+    });
+
+    // check:
+
+    app.get("/getStatistic",verifyJWT,verifyAdmin , async (req, res) => {
+      const totalUser = await usersCollection.countDocuments({});
+
+      const userStat = await usersCollection.aggregate([
+        {
+          $group: {
+            _id: "$role",
+            count: { $sum: 1 },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            status: "$_id",
+            count: 1,
+          },
+        },
+      ]).toArray();
+      const totalPayment = await paymentCollection
+        .aggregate([
+          {
+            $group: {
+              _id: null,
+              totalCost: { $sum: "$Cost" },
+            },
+          },
+          {
+            $project: {
+              _id: 0,
+              totalCost: 1,
+            },
+          },
+        ])
+        .toArray();
+
+      const orderStatusCounts = await ordersCollection
+        .aggregate([
+          {
+            $group: {
+              _id: "$orderStatus",
+              count: { $sum: 1 },
+            },
+          },
+          {
+            $project: {
+              _id: 0,
+              status: "$_id",
+              count: 1,
+            },
+          },
+        ])
+        .toArray();
+      let pendingOrders = 0;
+      let deliveredOrders = 0;
+
+      orderStatusCounts.forEach((item) => {
+        if (item.status === "delivered") deliveredOrders = item.count;
+        if (item.status === "pending" || item.status === "accepted")
+          pendingOrders += item.count;
+      });
+
+      const statData = {
+        pendingOrders: pendingOrders,
+        deliveredOrders: deliveredOrders,
+        totalRevinue: totalPayment[0].totalCost,
+        totalUser: totalUser,
+        userStat
+      };
+      res.send(statData);
+    });
+
     await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
