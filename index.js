@@ -14,7 +14,7 @@ const uri = process.env.MONGODB_KEY;
 // middleware
 app.use(
   cors({
-    origin: ["http://localhost:5173", "http://localhost:5174"],
+    origin: ["https://localchefbazaar-b1365.web.app"],
     credentials: true,
     optionSuccessStatus: 200,
   })
@@ -263,7 +263,7 @@ async function run() {
       const mealData = req.body;
       const OrderUser = await usersCollection.findOne({email:req.token_email});
 
-      if(OrderUser.status==="Fraud");
+      if(OrderUser.status==="Fraud")
       {
         return res.send({message:"Fraud"});
       }
@@ -377,7 +377,7 @@ async function run() {
     app.post("/orders", verifyJWT, async (req, res) => {
       const ordersInfo = req.body;
       const OrderUser = await usersCollection.findOne({email:req.token_email});
-      if(OrderUser.status==="Fraud");
+      if(OrderUser.status==="Fraud")
       {
         return res.send({message:"Fraud"});
       }
@@ -438,6 +438,7 @@ async function run() {
 
     app.post("/create-checkout-session", async (req, res) => {
       const paymentInfo = req.body;
+      const unitAmount=Math.round(parseFloat(paymentInfo.cost) * 100)
       const session = await stripe.checkout.sessions.create({
         line_items: [
           {
@@ -446,7 +447,7 @@ async function run() {
               product_data: {
                 name: paymentInfo?.mealName,
               },
-              unit_amount: Number(paymentInfo.cost) * 100,
+              unit_amount:unitAmount ,
             },
             quantity: paymentInfo.quantity,
           },
@@ -522,7 +523,7 @@ async function run() {
       const query = {
         chefID: chefID,
       };
-      const result = await ordersCollection.find(query).toArray();
+      const result = await ordersCollection.find(query).sort({orderTime:-1}).toArray();
       res.send(result);
     });
     // Post REviews
