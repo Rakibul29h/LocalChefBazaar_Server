@@ -283,20 +283,26 @@ async function run() {
     // Get All meals
 
     app.get("/allMeals", async (req, res) => {
-      const { sort,limits=0,skip=0,search="" } = req.query;
+      const { sort, limits = 0, skip = 0, search = "" } = req.query;
       let sortOption = {};
       if (sort === "des") {
         sortOption = { price: -1 };
       } else if (sort === "asc") {
         sortOption = { price: 1 };
       }
-      const query=search?{foodName:{$regex:search,$options:"i"}}:{};
-      const cursor = mealsCollection.find(query).sort(sortOption).limit(Number(limits)).skip( Number(skip));
+      const query = search
+        ? { foodName: { $regex: search, $options: "i" } }
+        : {};
+      const cursor = mealsCollection
+        .find(query)
+        .sort(sortOption)
+        .limit(Number(limits))
+        .skip(Number(skip));
       const result = await cursor.toArray();
-      const totalMeal= await mealsCollection.countDocuments(query);
+      const totalMeal = await mealsCollection.countDocuments(query);
       res.send({
-        totalMeal:totalMeal,
-        meals:result
+        totalMeal: totalMeal,
+        meals: result,
       });
     });
 
@@ -513,7 +519,29 @@ async function run() {
         return res.status(403).send({ message: "Access Forbiden" });
       }
       const result = await reviewCollection.insertOne(reviewData);
-      console.log(result);
+
+      const avgResult = await reviewCollection
+        .aggregate([
+          { $match: { foodId: reviewData.foodId } },
+          {
+            $group: {
+              _id: "$foodId",
+              averageRating: { $avg: { $toDouble: "$rating" } },
+              totalReviews: { $sum: 1 },
+            },
+          },
+        ])
+        .toArray();
+      if (avgResult.length > 0) {
+        await mealsCollection.updateOne(
+          { _id: new ObjectId(reviewData.foodId) },
+          {
+            $set: {
+              rating: Number(avgResult[0].averageRating.toFixed(1)),
+            },
+          }
+        );
+      }
       res.send(result);
     });
 
@@ -521,6 +549,15 @@ async function run() {
       const { id } = req.query;
       const result = await reviewCollection
         .find({ foodId: id })
+        .sort({ date: -1 })
+        .toArray();
+      res.send(result);
+    });
+
+    app.get("/Hreview", async (req, res) => {
+      const result = await reviewCollection
+        .find({})
+        .limit(5)
         .sort({ date: -1 })
         .toArray();
       res.send(result);
@@ -549,6 +586,29 @@ async function run() {
         },
       };
       const result = await reviewCollection.updateOne(query, updatedData, {});
+      const avgResult = await reviewCollection
+        .aggregate([
+          { $match: { foodId: reviewData.foodId } },
+          {
+            $group: {
+              _id: "$foodId",
+              averageRating: { $avg: { $toDouble: "$rating" } },
+              totalReviews: { $sum: 1 },
+            },
+          },
+        ])
+        .toArray();
+      if (avgResult.length > 0) {
+        await mealsCollection.updateOne(
+          { _id: new ObjectId(reviewData.foodId) },
+          {
+            $set: {
+              rating: Number(avgResult[0].averageRating.toFixed(1)),
+            },
+          }
+        );
+      }
+
       res.send(result);
     });
 
@@ -604,24 +664,26 @@ async function run() {
 
     // check:
 
-    app.get("/getStatistic",verifyJWT,verifyAdmin , async (req, res) => {
+    app.get("/getStatistic", verifyJWT, verifyAdmin, async (req, res) => {
       const totalUser = await usersCollection.countDocuments({});
 
-      const userStat = await usersCollection.aggregate([
-        {
-          $group: {
-            _id: "$role",
-            count: { $sum: 1 },
+      const userStat = await usersCollection
+        .aggregate([
+          {
+            $group: {
+              _id: "$role",
+              count: { $sum: 1 },
+            },
           },
-        },
-        {
-          $project: {
-            _id: 0,
-            status: "$_id",
-            count: 1,
+          {
+            $project: {
+              _id: 0,
+              status: "$_id",
+              count: 1,
+            },
           },
-        },
-      ]).toArray();
+        ])
+        .toArray();
       const totalPayment = await paymentCollection
         .aggregate([
           {
@@ -670,7 +732,7 @@ async function run() {
         deliveredOrders: deliveredOrders,
         totalRevinue: totalPayment[0].totalCost,
         totalUser: totalUser,
-        userStat
+        userStat,
       };
       res.send(statData);
     });
