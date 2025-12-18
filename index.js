@@ -244,7 +244,7 @@ async function run() {
     });
     // get all user
     app.get("/users", verifyJWT, verifyAdmin, async (req, res) => {
-      const cursor = usersCollection.find({});
+      const cursor = usersCollection.find({}).sort({created_at:-1});
       const result = await cursor.toArray();
       res.send(result);
     });
@@ -259,8 +259,15 @@ async function run() {
     });
 
     // Create Meals
-    app.post("/createMeals", verifyJWT, async (req, res) => {
+    app.post("/createMeals", verifyJWT,verifyChef, async (req, res) => {
       const mealData = req.body;
+      const OrderUser = await usersCollection.findOne({email:req.token_email});
+
+      if(OrderUser.status==="Fraud");
+      {
+        return res.send({message:"Fraud"});
+      }
+
       mealData.created_at = new Date().toLocaleString();
       if (mealData.chefEmail !== req.token_email) {
         return res.status(403).send({ message: "Access Forbidden" });
@@ -369,6 +376,12 @@ async function run() {
 
     app.post("/orders", verifyJWT, async (req, res) => {
       const ordersInfo = req.body;
+      const OrderUser = await usersCollection.findOne({email:req.token_email});
+      if(OrderUser.status==="Fraud");
+      {
+        return res.send({message:"Fraud"});
+      }
+
       ordersInfo.orderStatus = "pending";
       const result = await ordersCollection.insertOne(ordersInfo);
       res.send(result);
@@ -737,10 +750,10 @@ async function run() {
       res.send(statData);
     });
 
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    // await client.db("admin").command({ ping: 1 });
+    // console.log(
+    //   "Pinged your deployment. You successfully connected to MongoDB!"
+    // );
   } finally {
   }
 }
