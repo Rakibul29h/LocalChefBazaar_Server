@@ -14,7 +14,7 @@ const uri = process.env.MONGODB_KEY;
 // middleware
 app.use(
   cors({
-    origin: ["https://localchefbazaar-b1365.web.app"],
+    origin: ["https://localchefbazaar-b1365.web.app","http://localhost:5173"],
     credentials: true,
     optionSuccessStatus: 200,
   })
@@ -602,7 +602,7 @@ async function run() {
       const result = await reviewCollection.updateOne(query, updatedData, {});
       const avgResult = await reviewCollection
         .aggregate([
-          { $match: { foodId: reviewData.foodId } },
+          { $match: { foodId: updateData.foodId } },
           {
             $group: {
               _id: "$foodId",
@@ -627,10 +627,33 @@ async function run() {
     });
 
     app.delete("/myReview/:id", verifyJWT, async (req, res) => {
-      const id = req.params;
+      const {id} = req.params;
+      const {foodId}=req.query;
       const result = await reviewCollection.deleteOne({
         _id: new ObjectId(id),
       });
+      const avgResult = await reviewCollection
+        .aggregate([
+          { $match: { foodId:foodId} },
+          {
+            $group: {
+              _id: "$foodId",
+              averageRating: { $avg: { $toDouble: "$rating" } },
+              totalReviews: { $sum: 1 },
+            },
+          },
+        ])
+        .toArray();
+      if (avgResult.length > 0) {
+        await mealsCollection.updateOne(
+          { _id: new ObjectId(foodId) },
+          {
+            $set: {
+              rating: Number(avgResult[0].averageRating.toFixed(1)),
+            },
+          }
+        );
+      }
       res.send(result);
     });
 
@@ -744,7 +767,7 @@ async function run() {
       const statData = {
         pendingOrders: pendingOrders,
         deliveredOrders: deliveredOrders,
-        totalRevinue: totalPayment[0].totalCost,
+        totalRevinue: totalPayment[0].totalCost.toFixed(2),
         totalUser: totalUser,
         userStat,
       };
