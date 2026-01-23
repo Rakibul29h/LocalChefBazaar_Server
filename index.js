@@ -279,7 +279,7 @@ async function run() {
 
     // get single Meal
 
-    app.get("/singleMeal/:id", verifyJWT, async (req, res) => {
+    app.get("/singleMeal/:id", async (req, res) => {
       const { id } = req.params;
       const query = {
         _id: new ObjectId(id),
@@ -316,7 +316,7 @@ async function run() {
     // Get home meals
 
     app.get("/hMeals", async (req, res) => {
-      const cursor = mealsCollection.find({}).limit(6).sort({ created_at: 1 });
+      const cursor = mealsCollection.find({}).limit(12).sort({ created_at: 1 });
       const result = await cursor.toArray();
       res.send(result);
     });
