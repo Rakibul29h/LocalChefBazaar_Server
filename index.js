@@ -14,9 +14,12 @@ const uri = process.env.MONGODB_KEY;
 // middleware
 app.use(
   cors({
-    origin: ["https://localchefbazaar-b1365.web.app","http://localhost:5173"],
+    origin: [
+      "https://localchefbazaar-b1365.web.app",
+      "http://localhost:5173",
+    ],
     credentials: true,
-    optionSuccessStatus: 200,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   })
 );
 app.use(express.json());
@@ -44,8 +47,8 @@ const verifyJWT = (req, res, next) => {
       return res.status(401).send({ message: "unauthorized access" });
     }
     req.token_email = decoded.email;
+    next();
   });
-  next();
 };
 
 async function run() {
@@ -279,7 +282,7 @@ async function run() {
 
     // get single Meal
 
-    app.get("/singleMeal/:id", verifyJWT, async (req, res) => {
+    app.get("/singleMeal/:id", async (req, res) => {
       const { id } = req.params;
       const query = {
         _id: new ObjectId(id),
@@ -289,34 +292,71 @@ async function run() {
     });
     // Get All meals
 
+    // app.get("/allMeals", async (req, res) => {
+    //   const { sort, limits = 0, skip = 0, search = "" } = req.query;
+    //   let sortOption = {};
+    //   if (sort === "des") {
+    //     sortOption = { price: -1 };
+    //   } else if (sort === "asc") {
+    //     sortOption = { price: 1 };
+    //   }
+    //   const query = search
+    //     ? { foodName: { $regex: search, $options: "i" } }
+    //     : {};
+    //   const cursor = mealsCollection
+    //     .find(query)
+    //     .sort(sortOption)
+    //     .limit(Number(limits))
+    //     .skip(Number(skip));
+    //   const result = await cursor.toArray();
+    //   const totalMeal = await mealsCollection.countDocuments(query);
+    //   res.send({
+    //     totalMeal: totalMeal,
+    //     meals: result,
+    //   });
+    // });
+
     app.get("/allMeals", async (req, res) => {
-      const { sort, limits = 0, skip = 0, search = "" } = req.query;
-      let sortOption = {};
-      if (sort === "des") {
-        sortOption = { price: -1 };
-      } else if (sort === "asc") {
-        sortOption = { price: 1 };
-      }
-      const query = search
-        ? { foodName: { $regex: search, $options: "i" } }
-        : {};
-      const cursor = mealsCollection
-        .find(query)
-        .sort(sortOption)
-        .limit(Number(limits))
-        .skip(Number(skip));
-      const result = await cursor.toArray();
-      const totalMeal = await mealsCollection.countDocuments(query);
-      res.send({
-        totalMeal: totalMeal,
-        meals: result,
-      });
+  try {
+    const { sort, limits = 0, skip = 0, search = "" } = req.query;
+    
+    let sortOption = {};
+    if (sort === "des") {
+      sortOption = { price: -1 };
+    } else if (sort === "asc") {
+      sortOption = { price: 1 };
+    }
+
+    const query = search
+      ? { foodName: { $regex: search, $options: "i" } }
+      : {};
+
+    let cursor = mealsCollection.find(query);
+    
+   
+    if (Object.keys(sortOption).length > 0) {
+      cursor = cursor.sort(sortOption);
+    }
+
+    cursor = cursor.limit(Number(limits)).skip(Number(skip));
+
+    const result = await cursor.toArray();
+    const totalMeal = await mealsCollection.countDocuments(query);
+
+    res.send({
+      totalMeal: totalMeal,
+      meals: result,
     });
 
+  } catch (error) {
+    console.error("allMeals error:", error);
+    res.status(500).send({ message: error.message });
+  }
+});
     // Get home meals
 
     app.get("/hMeals", async (req, res) => {
-      const cursor = mealsCollection.find({}).limit(6).sort({ created_at: 1 });
+      const cursor = mealsCollection.find({}).limit(12).sort({ created_at: 1 });
       const result = await cursor.toArray();
       res.send(result);
     });
@@ -588,7 +628,7 @@ async function run() {
     // update user review
 
     app.patch("/myReview/:id", verifyJWT, async (req, res) => {
-      const id = req.params;
+      const {id} = req.params;
       const updateData = req.body;
       const query = {
         _id: new ObjectId(id),
@@ -691,7 +731,7 @@ async function run() {
     // Delete from favorite meal:
 
     app.delete("/myFavorite/:id", verifyJWT, async (req, res) => {
-      const id = req.params;
+      const {id} = req.params;
       const query = {
         _id: new ObjectId(id),
       };
@@ -787,6 +827,6 @@ app.get("/", (req, res) => {
   res.send("Hello from Server..");
 });
 
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
-});
+// app.listen(port, () => {
+//   console.log(`Server is running on port ${port}`);
+// });
