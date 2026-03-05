@@ -18,7 +18,7 @@ app.use(
       "https://localchefbazaar-b1365.web.app",
       "http://localhost:5173",
     ],
-    credentials: true,
+    credentials: true
     // methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   })
 );
