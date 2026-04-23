@@ -14,15 +14,12 @@ const uri = process.env.MONGODB_KEY;
 // middleware
 app.use(
   cors({
-    origin: [
-      "https://localchefbazaar-b1365.web.app",
-      "http://localhost:5173",
-    ],
-    credentials: true
+    origin: ["https://localchefbazaar-b1365.web.app", "http://localhost:5173"],
+    credentials: true,
     // methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  })
+  }),
 );
-app.options("*", cors());
+app.options("/*splat", cors());
 app.use(express.json());
 app.use(cookieParser());
 
@@ -55,6 +52,7 @@ const verifyJWT = (req, res, next) => {
 async function run() {
   try {
     const db = client.db("LocalChefBazaar");
+
     const usersCollection = db.collection("Users");
     const mealsCollection = db.collection("Meals");
     const changeRoleRequestCollection = db.collection("Role Changing Request");
@@ -179,7 +177,7 @@ async function run() {
       const requestResult = await changeRoleRequestCollection.updateOne(
         requestQuery,
         update,
-        {}
+        {},
       );
 
       if (type === "chef") {
@@ -192,7 +190,7 @@ async function run() {
               chefID: chefId,
             },
           },
-          {}
+          {},
         );
         return res.send(result);
       } else {
@@ -203,7 +201,7 @@ async function run() {
               role: "Admin",
             },
           },
-          {}
+          {},
         );
         return res.send(result1);
       }
@@ -222,7 +220,7 @@ async function run() {
       const result = await changeRoleRequestCollection.updateOne(
         query,
         update,
-        {}
+        {},
       );
       res.send(result);
     });
@@ -248,7 +246,7 @@ async function run() {
     });
     // get all user
     app.get("/users", verifyJWT, verifyAdmin, async (req, res) => {
-      const cursor = usersCollection.find({}).sort({created_at:-1});
+      const cursor = usersCollection.find({}).sort({ created_at: -1 });
       const result = await cursor.toArray();
       res.send(result);
     });
@@ -263,13 +261,14 @@ async function run() {
     });
 
     // Create Meals
-    app.post("/createMeals", verifyJWT,verifyChef, async (req, res) => {
+    app.post("/createMeals", verifyJWT, verifyChef, async (req, res) => {
       const mealData = req.body;
-      const OrderUser = await usersCollection.findOne({email:req.token_email});
+      const OrderUser = await usersCollection.findOne({
+        email: req.token_email,
+      });
 
-      if(OrderUser.status==="Fraud")
-      {
-        return res.send({message:"Fraud"});
+      if (OrderUser.status === "Fraud") {
+        return res.send({ message: "Fraud" });
       }
 
       mealData.created_at = new Date().toLocaleString();
@@ -318,42 +317,40 @@ async function run() {
     // });
 
     app.get("/allMeals", async (req, res) => {
-  try {
-    const { sort, limits = 0, skip = 0, search = "" } = req.query;
-    
-    let sortOption = {};
-    if (sort === "des") {
-      sortOption = { price: -1 };
-    } else if (sort === "asc") {
-      sortOption = { price: 1 };
-    }
+      try {
+        const { sort, limits = 0, skip = 0, search = "" } = req.query;
 
-    const query = search
-      ? { foodName: { $regex: search, $options: "i" } }
-      : {};
+        let sortOption = {};
+        if (sort === "des") {
+          sortOption = { price: -1 };
+        } else if (sort === "asc") {
+          sortOption = { price: 1 };
+        }
 
-    let cursor = mealsCollection.find(query);
-    
-   
-    if (Object.keys(sortOption).length > 0) {
-      cursor = cursor.sort(sortOption);
-    }
+        const query = search
+          ? { foodName: { $regex: search, $options: "i" } }
+          : {};
 
-    cursor = cursor.limit(Number(limits)).skip(Number(skip));
+        let cursor = mealsCollection.find(query);
 
-    const result = await cursor.toArray();
-    const totalMeal = await mealsCollection.countDocuments(query);
+        if (Object.keys(sortOption).length > 0) {
+          cursor = cursor.sort(sortOption);
+        }
 
-    res.send({
-      totalMeal: totalMeal,
-      meals: result,
+        cursor = cursor.limit(Number(limits)).skip(Number(skip));
+
+        const result = await cursor.toArray();
+        const totalMeal = await mealsCollection.countDocuments(query);
+
+        res.send({
+          totalMeal: totalMeal,
+          meals: result,
+        });
+      } catch (error) {
+        console.error("allMeals error:", error);
+        res.status(500).send({ message: error.message });
+      }
     });
-
-  } catch (error) {
-    console.error("allMeals error:", error);
-    res.status(500).send({ message: error.message });
-  }
-});
     // Get home meals
 
     app.get("/hMeals", async (req, res) => {
@@ -417,10 +414,11 @@ async function run() {
 
     app.post("/orders", verifyJWT, async (req, res) => {
       const ordersInfo = req.body;
-      const OrderUser = await usersCollection.findOne({email:req.token_email});
-      if(OrderUser.status==="Fraud")
-      {
-        return res.send({message:"Fraud"});
+      const OrderUser = await usersCollection.findOne({
+        email: req.token_email,
+      });
+      if (OrderUser.status === "Fraud") {
+        return res.send({ message: "Fraud" });
       }
 
       ordersInfo.orderStatus = "pending";
@@ -479,7 +477,7 @@ async function run() {
 
     app.post("/create-checkout-session", async (req, res) => {
       const paymentInfo = req.body;
-      const unitAmount=Math.round(parseFloat(paymentInfo.cost) * 100)
+      const unitAmount = Math.round(parseFloat(paymentInfo.cost) * 100);
       const session = await stripe.checkout.sessions.create({
         line_items: [
           {
@@ -488,7 +486,7 @@ async function run() {
               product_data: {
                 name: paymentInfo?.mealName,
               },
-              unit_amount:unitAmount ,
+              unit_amount: unitAmount,
             },
             quantity: paymentInfo.quantity,
           },
@@ -510,7 +508,7 @@ async function run() {
     // get session status:
     app.get("/session-status", async (req, res) => {
       const session = await stripe.checkout.sessions.retrieve(
-        req.query.session_id
+        req.query.session_id,
       );
       const orderId = session.metadata.orderId;
       const transaction_ID = session.payment_intent;
@@ -540,7 +538,7 @@ async function run() {
                 transaction_ID,
               },
             },
-            {}
+            {},
           );
           return res.send({
             transaction_ID,
@@ -564,7 +562,10 @@ async function run() {
       const query = {
         chefID: chefID,
       };
-      const result = await ordersCollection.find(query).sort({orderTime:-1}).toArray();
+      const result = await ordersCollection
+        .find(query)
+        .sort({ orderTime: -1 })
+        .toArray();
       res.send(result);
     });
     // Post REviews
@@ -594,7 +595,7 @@ async function run() {
             $set: {
               rating: Number(avgResult[0].averageRating.toFixed(1)),
             },
-          }
+          },
         );
       }
       res.send(result);
@@ -629,7 +630,7 @@ async function run() {
     // update user review
 
     app.patch("/myReview/:id", verifyJWT, async (req, res) => {
-      const {id} = req.params;
+      const { id } = req.params;
       const updateData = req.body;
       const query = {
         _id: new ObjectId(id),
@@ -655,12 +656,12 @@ async function run() {
         .toArray();
       if (avgResult.length > 0) {
         await mealsCollection.updateOne(
-          { _id: new ObjectId(reviewData.foodId) },
+          { _id: new ObjectId(updateData.foodId) },
           {
             $set: {
               rating: Number(avgResult[0].averageRating.toFixed(1)),
             },
-          }
+          },
         );
       }
 
@@ -668,14 +669,14 @@ async function run() {
     });
 
     app.delete("/myReview/:id", verifyJWT, async (req, res) => {
-      const {id} = req.params;
-      const {foodId}=req.query;
+      const { id } = req.params;
+      const { foodId } = req.query;
       const result = await reviewCollection.deleteOne({
         _id: new ObjectId(id),
       });
       const avgResult = await reviewCollection
         .aggregate([
-          { $match: { foodId:foodId} },
+          { $match: { foodId: foodId } },
           {
             $group: {
               _id: "$foodId",
@@ -692,7 +693,7 @@ async function run() {
             $set: {
               rating: Number(avgResult[0].averageRating.toFixed(1)),
             },
-          }
+          },
         );
       }
       res.send(result);
@@ -732,7 +733,7 @@ async function run() {
     // Delete from favorite meal:
 
     app.delete("/myFavorite/:id", verifyJWT, async (req, res) => {
-      const {id} = req.params;
+      const { id } = req.params;
       const query = {
         _id: new ObjectId(id),
       };
@@ -808,7 +809,7 @@ async function run() {
       const statData = {
         pendingOrders: pendingOrders,
         deliveredOrders: deliveredOrders,
-        totalRevinue: totalPayment[0].totalCost.toFixed(2),
+        totalRevinue: totalPayment[0].totalCost.toFixed(2) ?? "0.00",
         totalUser: totalUser,
         userStat,
       };
@@ -827,7 +828,7 @@ run().catch(console.dir);
 app.get("/", (req, res) => {
   res.send("Hello from Server..");
 });
-
-// app.listen(port, () => {
-//   console.log(`Server is running on port ${port}`);
-// });
+                                          
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`);
+});
